@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    html,
+    body {
+      font-family: Arial, sans-serif;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      height: 100%;
+      position: relative;
+    }
+
+    input {
+      font-size: 12px;
+    }
+
+    h1 {
+      color: #525454;
+      font-size: 22px;
+      margin: 0 0 10px 0;
+      text-align: center;
+    }
+
+    #hide-listings,
+    #show-listings {
+      width: 48%;
+    }
+
+    #map {
+      bottom: 0px;
+      height: 100%;
+      left: 362px;
+      position: absolute;
+      right: 0px;
+    }
+
+    .options-box {
+      background: #fff;
+      border: 1px solid #999;
+      border-radius: 3px;
+      height: 100%;
+      line-height: 35px;
+      padding: 10px 10px 30px 10px;
+      text-align: left;
+      width: 340px;
+    }
+
+    hr {
+      background: #D0D7D9;
+      height: 1px;
+      margin: 20px 0 20px 0;
+      border: none;
+    }
+
+    #pano {
+      width: 200px;
+      height: 200px;
+    }
+
+    .text {
+      font-size: 12px;
+    }
+
+    #toggle-drawing {
+      width: 27%;
+      position: relative;
+      margin-left: 10px;
+    }
+
+    #zoom-to-area-text {
+      /*position: relative;*/
+      width: 70%;
+    }
+
+    #zoom-to-area {
+      width: 24%;
+    }
+
+    #places-search,
+    #search-within-time-text {
+      width: 84%;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <div class="options-box">
+      <h1>find</h1>
+      <div>
+        <input type="button" id="show-listings" value="show listings">
+        <input type="button" id="hide-listings" value="hide listings">
+        <hr>
+        <span class="text">Draw a shape to search within it for dorm!</span>
+        <!-- 打开和关闭绘图工具 -->
+        <input id="toggle-drawing" type="button" value="Drawing Tools">
+      </div>
+      <hr>
+      <!-- 提示用户选择城市中的一个区域，并添加缩放按钮 -->
+      <div>
+        <input type="text" id="zoom-to-area-text" value="enter your favourite area">
+        <input type="button" id="zoom-to-area" value="Zoom">
+      </div>
+      <hr>
+      <div>
+        <span class="text">Within</span>
+        <!-- 希望花费在通勤上的最长时间 -->
+        <select id="max-duration">
+          <option value="10">10 min</option>
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="60">1 hour</option>
+        </select>
+        <!-- 出行方式 -->
+        <select id="mode">
+          <option value="DRIVING">drive</option>
+          <option value="WALKING">walk</option>
+          <option value="BICYCLING">bike</option>
+          <option value="TRANSIT">transit ride</option>
+        </select>
+        <span class="text">of</span>
+        <!-- 输入想要的地址和提示，以及前往按钮 -->
+        <input type="text" id="search-within-time-text" placeholder="Ex:中国工商银行ATM ，浙江省杭州市江干区下沙学林街">
+        <input type="button" id="search-within-time" value="Go">
+      </div>
+      <hr>
+      <div>
+        <span class="text">search for nearby places</span>
+        <input type="text" id="places-search" placeholder="Ex:电子科技大学邮政代办所">
+        <input type="button" id="go-places" value="Go">
+      </div>
+    </div>
+    <div id="map"></div>
+  </div>
+
+  <script>
+    var map;
+    var markers = [];
+    //确保只有一个多边形被渲染
+    var polygon = null;
+    //创建一个全局地点标记数组
+    var placeMarkers = [];
+
+    //加载地图
+    function initMap() {
+      // 改变地图样式
+      var styles = [{
+        //地图特征是可以在地图上作为目标的地理元素
+        featureType: 'water',
+        stylers: [{
+          color: '#19a0d8'
+        }]
+      }, {
+        featureType: 'administrative',
+        //元素是想要对特征进行修改的对象(标签、图形等)
+        elementType: 'labels.text.stroke',
+        //应用于地图特征的颜色、可见属性
+        stylers: [{
+            color: '#ffffff'
+          },
+          {
+            weight: 6
+          }
+        ]
+      }, {
+        featureType: 'administrative',
+        elementType: 'labels.text.fill',
+        stylers: [{
+          color: '#e85113'
+        }]
+      }, {
+        //蓝色高速公路
+        featureType: 'road.highway',
+        elementType: 'geometry.stroke',
+        stylers: [{
+            color: '#efe9e4'
+          },
+          {
+            lightness: -40
+          }
+        ]
+      }, {
+        featureType: 'transit.station',
+        stylers: [{
+            weight: 9
+          },
+          {
+            hue: '#e85113'
+          }
+        ]
+      }, {
+        featureType: 'road.highway',
+        elementType: 'labels.icon',
+        stylers: [{
+          visibility: 'off'
+        }]
+      }, {
+        featureType: 'water',
+        elementType: 'labels.text.stroke',
+        stylers: [{
+          lightness: 100
+        }]
+      }, {
+        featureType: 'water',
+        elementType: 'labels.text.fill',
+        stylers: [{
+          lightness: -100
+        }]
+      }, {
+        featureType: 'poi',
+        elementType: 'geometry',
+        stylers: [{
+            visibility: 'on'
+          },
+          {
+            color: '#f0e4d3'
+          }
+        ]
+      }, {
+        featureType: 'road.highway',
+        elementType: 'geometry.fill',
+        stylers: [{
+            color: '#efe9e4'
+          },
+          {
+            lightness: -25
+          }
+        ]
+      }];
+
+      map = new google.maps.Map(document.getElementById('map'), {
+        //中心 纬度 经度
+        center: {
+          lat: 30.317655,
+          lng: 120.343745
+        },
+        //缩放值 越高越详细
+        zoom: 13,
+        //禁止用户将地图类型改为公路、地形、卫星等
+        mapTypeControl: false,
+        //设置地图对象选项中的属性
+        styles: styles
+      });
+
+      //把地点自动完成实例绑定到文本输入框
+      var timeAutocomplete = new google.maps.places.Autocomplete(
+        document.getElementById('search-within-time-text')
+      );
+      var zoomAutocomplete = new google.maps.places.Autocomplete(
+        document.getElementById('zoom-to-area-text')
+      );
+      //添加边界限制为地图范围内
+      zoomAutocomplete.bindTo('bounds', map);
+      //创建一个文本搜索框
+      var searchBox = new google.maps.places.SearchBox(
+        document.getElementById('places-search')
+      );
+      //搜索框范围限制在地图内
+      searchBox.setBounds(map.getBounds());
+
+      //创建一组位置信息
+      var locations = [{
+          title: 'building 1',
+          location: {
+            lat: 30.310597,
+            lng: 120.343251
+          }
+        },
+        {
+          title: 'building 2',
+          location: {
+            lat: 30.313089,
+            lng: 120.340934
+          }
+        },
+        {
+          title: 'building 3',
+          location: {
+            lat: 30.313103,
+            lng: 120.344903
+          }
+        },
+        {
+          title: 'building 4',
+          location: {
+            lat: 30.310653,
+            lng: 120.347006
+          }
+        },
+      ];
+
+      //创建两个标记图标
+      //标记出现在地图上时的默认图标
+      var defaultIcon = makeMarkerIcon('0091ff');
+
+      //鼠标移到地图上时突出显示的图标
+      var highlightedIcon = makeMarkerIcon('FFFF24');
+
+      //创建信息窗口
+      var largeInfowindow = new google.maps.InfoWindow();
+
+      //在初始化函数中创建新对象drawingManager
+      var drawingManager = new google.maps.drawing.DrawingManager({
+        //默认绘图模式
+        drawingMode: google.maps.drawing.OverlayType.POLYGON,
+        drawingControl: true,
+        drawingControlOptions: {
+          //地图上控件的位置
+          position: google.maps.ControlPosition.TOP_LEFT,
+          //指定多个绘图模式 此处为多边形绘图
+          //其他绘图模式：'marker', 'polyline', 'rectangle', 'circle', or null.
+          drawingModes: [
+            google.maps.drawing.OverlayType.POLYGON
+          ]
+        }
+      });
+
+
+      //通过位置数组初始化创建标识数组
+      for (var i = 0; i < locations.length; i++) {
+        var position = locations[i].location;
+        var title = locations[i].title;
+        //为每个位置创建标识
+        var marker = new google.maps.Marker({
+          map: map,
+          position: position,
+          title: title,
+          //将每个标记的图标设置为默认图标
+          icon: defaultIcon,
+          animation: google.maps.Animation.DROP,
+          id: i
+        });
+        //把marker放进markers数组里
+        markers.push(marker);
+        //添加事件使得点击时打开信息窗口
+        marker.addListener('click', function() {
+          populateInfoWindow(this, largeInfowindow);
+        });
+        // //传入各标识位置扩展边界
+        // bounds.extend(markers[i].position);
+
+        //鼠标悬停时突出显示图标
+        marker.addListener('mouseover', function() {
+          this.setIcon(highlightedIcon);
+        });
+        //鼠标移开时恢复默认图标
+        marker.addListener('mouseout', function() {
+          this.setIcon(defaultIcon);
+        });
+      }
+
+      //map.fitBounds(bounds);
+
+      //不立即设置标识的地图参数和扩展地图界限，用showListings函数做
+      document.getElementById('show-listings').addEventListener('click', showListings);
+      // document.getElementById('hide-listings').addEventListener('click', hideListings);
+      document.getElementById('hide-listings').addEventListener('click', function() {
+        hideMarkers(markers);
+      });
+      //添加事件：单击按钮时隐藏或显示绘图工具
+      document.getElementById('toggle-drawing').addEventListener('click', function() {
+        toggleDrawing(drawingManager);
+      });
+      //点击按钮缩放区域
+      document.getElementById('zoom-to-area').addEventListener('click', function() {
+        zoomToArea();
+      });
+      //点击按钮计算出行时间
+      document.getElementById('search-within-time').addEventListener('click', function() {
+        searchWithinTime();
+      });
+      // 监听用户从选项列表中选择一个选项
+      // 即地点变化事件
+      searchBox.addListener('places_changed', function() {
+        searchBoxPlaces(this);
+      });
+      // 监听用户输入并点击go按钮，而未选择建议选项的情况
+      document.getElementById('go-places').addEventListener('click', textSearchPlaces);
+
+
+      //当多边形完成时，遍历标记数组，显示在此多边形内的所有标记，并隐藏其余标记
+      drawingManager.addListener('overlaycomplete', function(event) {
+        // 检查多边形变量值，有则隐藏标记。
+        if (polygon) {
+          polygon.setMap(null);
+          hideMarkers(markers);
+        }
+        // 恢复正常显示模式
+        drawingManager.setDrawingMode(null);
+        // 捕获所画的覆盖区域并指定给多边形变量
+        polygon = event.overlay;
+        //设置多边形可编辑
+        polygon.setEditable(true);
+        // Searching within the polygon.
+        searchWithinPolygon(polygon);
+        // 在多边形被编辑后检查更改，重新进行搜索
+        polygon.getPath().addListener('set_at', searchWithinPolygon);
+        polygon.getPath().addListener('insert_at', searchWithinPolygon);
+      });
+
+    }
+
+    // 点击标识时弹出信息窗口。
+    function populateInfoWindow(marker, infowindow) {
+      // 检查信息窗口还没有在这个标识打开
+      if (infowindow.marker != marker) {
+        infowindow.marker = marker;
+        // infowindow.setContent('<div>' + marker.title + '</div>');
+        // infowindow.open(map, marker);
+        infowindow.setContent('');
+        // 确保信息窗口关闭时已清空marker属性值
+        infowindow.addListener('closeclick', function() {
+          infowindow.setMarker = null;
+        });
+        //此服务根据离标记最近的位置获取全景图像
+        //并找出相机朝向、角度(heading,pitch)
+        var streetViewService = new google.maps.StreetViewService();
+        //寻找街景图像的范围
+        var radius = 50;
+
+        function getStreetView(data, status) {
+          if (status == google.maps.StreetViewStatus.OK) {
+            //取最近的街景位置
+            var nearStreetViewLocation = data.location.latLng;
+            //计算相机方向，要在加载api时添加&libraries=geometry以使用谷歌地图的几何库
+            var heading = google.maps.geometry.spherical.computeHeading(
+              nearStreetViewLocation, marker.position);
+            infowindow.setContent('<div>' + marker.title + '</div><div id="pano"></div>');
+            //设置全景选项
+            var panoramaOptions = {
+              //最近的街景位置
+              position: nearStreetViewLocation,
+              //视角
+              pov: {
+                heading: heading,
+                pitch: 30
+              }
+            };
+            //创建街景并将它放在id为pano的div处的信息窗口
+            var panorama = new google.maps.StreetViewPanorama(
+              document.getElementById('pano'), panoramaOptions);
+          } else {
+            //如果没有找到街景就在信息窗口放入说明信息
+            infowindow.setContent('<div>' + marker.title + '</div>' +
+              '<div>No Street View Found</div>');
+          }
+        }
+
+        streetViewService.getPanoramaByLocation(marker.position, radius, getStreetView);
+        infowindow.open(map, marker);
+      }
+    }
+
+    // This function will loop through the markers array and display them all.
+    function showListings() {
+      //创建经纬度边界
+      var bounds = new google.maps.LatLngBounds();
+      // Extend the boundaries of the map for each marker and display the marker
+      for (var i = 0; i < markers.length; i++) {
+        //将每个标识的地图设置为map
+        markers[i].setMap(map);
+        //扩展地图界限来容纳标识
+        bounds.extend(markers[i].position);
+      }
+      map.fitBounds(bounds);
+    }
+
+    // // This function will loop through the listings and hide them all.
+    // function hideListings() {
+    //   for (var i = 0; i < markers.length; i++) {
+    //     //不删除标识，只隐藏
+    //     markers[i].setMap(null);
+    //   }
+    // }
+    function hideMarkers(markers) {
+      for (var i = 0; i < markers.length; i++) {
+        markers[i].setMap(null);
+      }
+    }
+
+    //创建标记图标对象函数
+    function makeMarkerIcon(markerColor) {
+      //获取标记颜色并创建markerimage(标记图像)使用该颜色，自定义其尺寸
+      var markerImage = new google.maps.MarkerImage(
+        'http://chart.googleapis.com/chart?chst=d_map_spin&chld=1.15|0|' + markerColor +
+        '|40|_|%E2%80%A2',
+        new google.maps.Size(21, 34),
+        new google.maps.Point(0, 0),
+        new google.maps.Point(10, 34),
+        new google.maps.Size(21, 34)
+      );
+      return markerImage;
+    }
+
+    function toggleDrawing(drawingManager) {
+      if (drawingManager.map) {
+        drawingManager.setMap(null);
+        //将覆盖区域删除，保留标记
+        if (polygon !== null) {
+          polygon.setMap(null);
+        }
+      } else {
+        drawingManager.setMap(map);
+      }
+    }
+
+    //使用用户所画的多边形和标记位置，并使用更多几何库功能检查多边形内是否有标记
+    function searchWithinPolygon() {
+      for (var i = 0; i < markers.length; i++) {
+        //有标记则显示，没有在则隐藏
+        if (google.maps.geometry.poly.containsLocation(markers[i].position, polygon)) {
+          markers[i].setMap(map);
+        } else {
+          markers[i].setMap(null);
+        }
+      }
+    }
+
+    // //查询polygon的area
+    // var area = google.maps.geometry.spherical.computeArea(polygon.getPath());
+    // window.alert(area+'this is polygon area');
+
+    //获取用户输入的地址,通过地理编码获得经纬度，然后放大
+    function zoomToArea() {
+      // 创建一个新的地理编码器实例
+      var geocoder = new google.maps.Geocoder();
+      // 捕获用户输入的地址
+      var address = document.getElementById('zoom-to-area-text').value;
+      // 确保地址不是空白
+      if (address == '') {
+        window.alert('You must enter an area, or address.');
+      } else {
+        // 对地址进行地理编码
+        geocoder.geocode({
+          address: address,
+          //添加要素限制以确保在城市内
+          componentRestrictions: {
+            locality: '杭州市'
+          }
+        }, function(results, status) {
+          //如果获得结果，检查地理编码器状态
+          if (status == google.maps.GeocoderStatus.OK) {
+            //通过获得的经纬度重新聚焦地图并放大
+            map.setCenter(results[0].geometry.location);
+            map.setZoom(15);
+          } else {
+            window.alert('We could not find that location - try entering a more' +
+              ' specific place.');
+          }
+        });
+      }
+    }
+
+    //使用distanceMatrixService计算每个标记和用户输入位置之间的距离和行程持续时间
+    function searchWithinTime() {
+      //初始化distanceMatrixService
+      var distanceMatrixService = new google.maps.DistanceMatrixService;
+      //获得并检查地址
+      var address = document.getElementById('search-within-time-text').value;
+      if (address == '') {
+        window.alert('you must enter an address');
+      } else {
+        // hideListings();
+        hideMarkers(markers);
+        //从标记列表中创建一个起点数组
+        var origins = [];
+        for (var i = 0; i < markers.length; i++) {
+          origins[i] = markers[i].position;
+        }
+        //将用户输入地址作为终点
+        var destination = address;
+        //捕获用户输入的出行方式
+        var mode = document.getElementById('mode').value;
+        //调用getDistanceMatrix函数，传入起点、唯一终点、出行方式
+        distanceMatrixService.getDistanceMatrix({
+          origins: origins,
+          destinations: [destination],
+          travelMode: google.maps.TravelMode[mode],
+          //指定距离单位为英制
+          unitSystem: google.maps.UnitSystem.IMPERIAL,
+        }, function(response, status) {
+          //收到返回的响应后，确认状态为OK
+          if (status !== google.maps.DistanceMatrixStatus.OK) {
+            window.alert('error was :' + status);
+          } else {
+            //显示符合用户输入条件的所有标记
+            displayMarkersWithinTime(response);
+          }
+        });
+      }
+    }
+
+    function displayMarkersWithinTime(response) {
+      //捕获用户输入的最大行程持续时间
+      var maxDuration = document.getElementById('max-duration').value;
+      //从响应中重新捕获所有起点和终点
+      var origins = response.originAddresses;
+      var destinations = response.destinationAddresses;
+      //为每个起点队和终点创建元素
+      //此元素将包含从A点到B点的距离和行程时间
+      var atLeastOne = false;
+      for (var i = 0; i < origins.length; i++) {
+        var results = response.rows[i].elements;
+        for (var j = 0; j < results.length; j++) {
+          var element = results[j];
+          if (element.status === "OK") {
+            //文本形式捕获距离
+            var distanceText = element.distance.text;
+            //捕获行程时间的数值，方便下面比较用户设定的最大行程时间
+            var duration = element.duration.value / 60;
+            //文本形式捕获行程时间
+            var durationText = element.duration.text;
+            if (duration <= maxDuration) {
+              //行程时间小于用户输入，显示标记
+              markers[i].setMap(map);
+              //即使状态OK也可能没找到在可接受通勤时间内的标记
+              //所以设定atLeastOne变量让用户知道
+              atLeastOne = true;
+              //对于显示的每个标记创建一个小的信息窗口
+              //在此信息窗口中显示持续时间和行程距离
+              //添加一个按钮指向新函数displayDirections( origins[i])
+              //传入起点是列出的地址，使用的终点是用户输入地址
+              var infowindow = new google.maps.InfoWindow({
+                content: durationText + 'away,' + distanceText +
+                  '<div><input type=\"button\" value=\"View Route\" onclick =' +
+                  '\"displayDirections(&quot;' + origins[i] + '&quot;);\"></input></div>'
+              });
+              infowindow.open(map, markers[i]);
+              markers[i].infowindow = infowindow;
+              //如果用户点击标记就关闭小的信息窗口，然后跳出大信息窗口显示全景图
+              google.maps.event.addListener(markers[i], 'click', function() {
+                this.infowindow.close();
+              });
+            }
+          }
+        }
+      }
+      if (!atLeastOne) {
+        window.alert('We could not find any locations within that distance!');
+      }
+    }
+
+    //计算实际方向并在地图上显示路线
+    function displayDirections(origin) {
+      // hideListings();
+      hideMarkers(markers);
+      //初始化新实例
+      var directionsService = new google.maps.DirectionsService;
+      //重新捕获用户输入终点和出行模式
+      var destinationAddress = document.getElementById('search-within-time-text').value;
+      var mode = document.getElementById('mode').value;
+      //计算路线，传入起点，终点，出行模式
+      directionsService.route({
+        // The origin is the passed in marker's position.
+        origin: origin,
+        // The destination is user entered address.
+        destination: destinationAddress,
+        travelMode: google.maps.TravelMode[mode]
+      }, function(response, status) {
+        //获得响应后确保状态为OK
+        if (status === google.maps.DirectionsStatus.OK) {
+          //此渲染器负责显示信息，在地图上显示最终的折线
+          var directionsDisplay = new google.maps.DirectionsRenderer({
+            //指定地图
+            map: map,
+            //从路线响应中获取方向
+            directions: response,
+            //路线可移动
+            draggable: true,
+            //路线绿色
+            polylineOptions: {
+              strokeColor: 'green'
+            }
+          });
+        } else {
+          window.alert('Directions request failed due to ' + status);
+        }
+      });
+
+    }
+
+    //当用户输入一个值时将获得普通查询词条
+    //用户选择搜索栏提供选项时
+    function searchBoxPlaces(searchBox) {
+      //隐藏上次搜索中的任何地点标记
+      hideMarkers(placeMarkers);
+      //找到匹配查询词条的所有地点
+      var places = searchBox.getPlaces();
+      // For each place, get the icon, name and location.
+      if (places.length == 0) {
+        window.alert('We did not find any places matching that search!');
+      } else {
+        createMarkersForPlaces(places);
+      }
+    }
+
+    // 此函数在用户输入查询词条或位置并点击go按钮时执行
+    function textSearchPlaces() {
+      //捕捉地图界限
+      var bounds = map.getBounds();
+      //隐藏上次搜索中的任何地点标记
+      hideMarkers(placeMarkers);
+      //创建新的地点服务实例
+      var placesService = new google.maps.places.PlacesService(map);
+      //传入用户输入的查询词条和地图界限
+      placesService.textSearch({
+        query: document.getElementById('places-search').value,
+        bounds: bounds
+      }, function(results, status) {
+        //返回的结果（地点数组）状态OK
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          createMarkersForPlaces(results);
+        }
+      });
+    }
+
+    // 遍历地点数组并为它们创建标记
+    function createMarkersForPlaces(places) {
+      var bounds = new google.maps.LatLngBounds();
+      for (var i = 0; i < places.length; i++) {
+        var place = places[i];
+        var icon = {
+          url: place.icon,
+          size: new google.maps.Size(35, 35),
+          origin: new google.maps.Point(0, 0),
+          anchor: new google.maps.Point(15, 34),
+          scaledSize: new google.maps.Size(25, 25)
+        };
+        // Create a marker for each place.
+        var marker = new google.maps.Marker({
+          map: map,
+          icon: icon,
+          title: place.name,
+          position: place.geometry.location,
+          id: place.place_id
+        });
+
+        //在每个不同地点标记间创造信息窗口显示地点详情
+        var placeInfoWindow = new google.maps.InfoWindow();
+        // marker.addListener('click', function() {
+        // getPlacesDetails(this, place);
+        // });
+        marker.addListener('click', function() {
+          if (placeInfoWindow.marker == this) {
+            console.log("This infowindow already is on this marker!");
+          } else {
+            getPlacesDetails(this, placeInfoWindow);
+          }
+        });
+        //将创建的每个标记放入placeMarkers数组
+        placeMarkers.push(marker);
+        //调节地图平衡并使它适当放入返回的所有地点标记
+        if (place.geometry.viewport) {
+          // Only geocodes have viewport.
+          bounds.union(place.geometry.viewport);
+        } else {
+          bounds.extend(place.geometry.location);
+        }
+      }
+      map.fitBounds(bounds);
+    }
+
+    //使用placeid进行地点详情查询
+    function getPlacesDetails(marker, infowindow) {
+      var service = new google.maps.places.PlacesService(map);
+      service.getDetails({
+        placeId: marker.id
+      }, function(place, status) {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          // 设定信息窗口中的地点标记值使它不会被二次创建
+          infowindow.marker = marker;
+          //将地点详细信息放入创建的信息窗口中
+          var innerHTML = '<div>';
+          if (place.name) {
+            innerHTML += '<strong>' + place.name + '</strong>';
+          }
+          if (place.formatted_address) {
+            innerHTML += '<br>' + place.formatted_address;
+          }
+          if (place.formatted_phone_number) {
+            innerHTML += '<br>' + place.formatted_phone_number;
+          }
+          if (place.opening_hours) {
+            innerHTML += '<br><br><strong>Hours:</strong><br>' +
+              place.opening_hours.weekday_text[0] + '<br>' +
+              place.opening_hours.weekday_text[1] + '<br>' +
+              place.opening_hours.weekday_text[2] + '<br>' +
+              place.opening_hours.weekday_text[3] + '<br>' +
+              place.opening_hours.weekday_text[4] + '<br>' +
+              place.opening_hours.weekday_text[5] + '<br>' +
+              place.opening_hours.weekday_text[6];
+          }
+          if (place.photos) {
+            innerHTML += '<br><br><img src="' + place.photos[0].getUrl({
+              maxHeight: 100,
+              maxWidth: 200
+            }) + '">';
+          }
+          innerHTML += '</div>';
+          infowindow.setContent(innerHTML);
+          infowindow.open(map, marker);
+          // Make sure the marker property is cleared if the infowindow is closed.
+          infowindow.addListener('closeclick', function() {
+            infowindow.marker = null;
+          });
+        }
+      });
+    }
+  </script>
+
+  <!-- 用于异步加载API -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=&libraries=places,drawing,geometry&v=3&callback=initMap">
+  </script>
+
+</body>
+
+</html>
